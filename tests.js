@@ -715,3 +715,113 @@ async function runPhase5Tests() {
 
     console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 5 успішно пройдено ===`, "color: blue; font-weight: bold;");
 }
+
+async function runPhase6Tests() {
+    console.log("%c=== Запуск автоматизованих тестів Фази 6 ===", "color: blue; font-weight: bold; font-size: 14px;");
+    let passed = 0;
+    const total = 5;
+
+    if (typeof db === 'undefined' || db === null) {
+        console.error("БД не ініціалізована. Тести скасовано.");
+        return;
+    }
+
+    // --- ПІДГОТОВКА (Setup) ---
+    // Створюємо ізольовані дані, щоб гарантовано мати замовлення для перевірки
+    db.run("INSERT INTO categories (name) VALUES ('ТестКат_Ф6')");
+    const catId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    db.run("INSERT INTO units (name, short_name) VALUES ('ТестОд_Ф6', 'од')");
+    const unitId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    db.run("INSERT INTO customers (name) VALUES ('ТестКлієнт_Ф6')");
+    const custId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    db.run(`INSERT INTO products (name, price, category_id, unit_id) VALUES ('Товар Ф6', 100, ${catId}, ${unitId})`);
+    const prodId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    // Створюємо замовлення (Сума: 100 * 1шт + 10% націнка + 50 доставка = 160)
+    db.run(`INSERT INTO orders (customer_id, markup_percent, delivery_cost, status, total_amount) VALUES (${custId}, 10, 50, 'Нове', 160)`);
+    const orderId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    db.run(`INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (${orderId}, ${prodId}, 1, 100)`);
+
+    // Перемикаємось на вкладку замовлень для коректної роботи DOM
+    if (typeof showSection === 'function') showSection('orders');
+
+    // ТП-6.1: Список замовлень
+    try {
+        renderOrdersHistory();
+        const tbody = document.getElementById('orders-list');
+        if (tbody && tbody.innerHTML.includes(`#${orderId}`)) {
+            console.log("%c[ПРОЙДЕНО] ТП-6.1:", "color: green;", "Збережені замовлення успішно відображаються у списку.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-6.1: Замовлення не знайдено у списку.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-6.1", e); }
+
+    // ТП-6.2: Деталі замовлення
+    try {
+        viewOrderDetails(orderId);
+        const modal = document.getElementById('order-modal');
+        const printArea = document.getElementById('print-area');
+
+        if (modal.style.display === 'block' && printArea.innerHTML.includes('Товар Ф6')) {
+            console.log("%c[ПРОЙДЕНО] ТП-6.2:", "color: green;", "Деталі замовлення (модальне вікно) успішно відкриваються з усіма позиціями.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-6.2: Модальне вікно не відкрилось або бракує деталей.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-6.2", e); }
+
+    // ТП-6.3: Друкована форма
+    try {
+        const printArea = document.getElementById('print-area');
+        // Перевіряємо наявність ключових CSS-класів та заголовків специфікації
+        if (printArea.innerHTML.includes('invoice-table') && printArea.innerHTML.includes('Специфікація')) {
+            console.log("%c[ПРОЙДЕНО] ТП-6.3:", "color: green;", "Друкована форма успішно згенерована у блоці print-area.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-6.3: Некоректна структура друкованої форми.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-6.3", e); }
+
+    // ТП-6.5: Звірка сум
+    try {
+        const printArea = document.getElementById('print-area');
+        const tbody = document.getElementById('orders-list');
+
+        // Сума нашого тестового замовлення має бути 160.00
+        const isTotalInDetails = printArea.innerHTML.includes('160.00');
+        const isTotalInList = tbody.innerHTML.includes('160.00');
+
+        if (isTotalInDetails && isTotalInList) {
+            console.log("%c[ПРОЙДЕНО] ТП-6.5:", "color: green;", "Сума у списку повністю збігається із сумою в деталях рахунку.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-6.5: Розбіжність сум у списку та деталях.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-6.5", e); }
+
+    // ТП-6.4: Статус
+    try {
+        changeOrderStatus(orderId, 'Виконано');
+
+        // Перевіряємо в БД чи відбулась зміна
+        const res = db.exec(`SELECT status FROM orders WHERE order_id = ${orderId}`);
+        if (res[0].values[0][0] === 'Виконано') {
+            console.log("%c[ПРОЙДЕНО] ТП-6.4:", "color: green;", "Статус замовлення успішно змінено та збережено в базі даних.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-6.4: Статус не оновився у БД.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-6.4", e); }
+
+    // --- ОЧИЩЕННЯ (Teardown) ---
+    // Закриваємо модалку та оновлюємо таблицю
+    closeOrderModal();
+    renderOrdersHistory();
+
+    console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 6 успішно пройдено ===`, "color: blue; font-weight: bold;");
+}

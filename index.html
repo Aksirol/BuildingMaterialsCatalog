@@ -16,11 +16,12 @@
         <button onclick="showSection('orders')">Замовлення</button>
         <button onclick="showSection('dictionaries')">Довідники</button>
 
-        <button onclick="runAutomatedTests()" style="background-color: #f39c12;">Тести Ф-1</button>
-        <button onclick="runPhase2Tests()" style="background-color: #f39c12;">Тести Ф-2</button>
-        <button onclick="runPhase3Tests()" style="background-color: #f39c12;">Тести Ф-3</button>
-        <button onclick="runPhase4Tests()" style="background-color: #f39c12;">Тести Ф-4</button>
-        <button onclick="runPhase5Tests()" style="background-color: #e74c3c; color: white; font-weight: bold;">Тести Ф-5</button>
+        <button onclick="runAutomatedTests()" style="background-color: #f39c12;">Т-1</button>
+        <button onclick="runPhase2Tests()" style="background-color: #f39c12;">Т-2</button>
+        <button onclick="runPhase3Tests()" style="background-color: #f39c12;">Т-3</button>
+        <button onclick="runPhase4Tests()" style="background-color: #f39c12;">Т-4</button>
+        <button onclick="runPhase5Tests()" style="background-color: #f39c12;">Т-5</button>
+        <button onclick="runPhase6Tests()" style="background-color: #8e44ad; color: white;">Тести Ф-6</button>
     </nav>
 </header>
 
@@ -268,5 +269,19 @@
 <script src="lib/sql-wasm.js"></script>
 <script src="app.js"></script>
 <script src="tests.js"></script>
+
+<div id="order-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeOrderModal()">&times;</span>
+
+        <div id="print-area">
+        </div>
+
+        <div class="modal-actions no-print" style="margin-top: 2rem; text-align: right;">
+            <button class="btn-save" style="background-color: #34495e; font-size: 1.1rem;" onclick="window.print()">🖨 Друк замовлення</button>
+            <button class="btn-clear" onclick="closeOrderModal()">Закрити</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

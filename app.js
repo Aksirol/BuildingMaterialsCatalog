@@ -729,6 +729,7 @@ function saveOrder() {
 }
 
 // Відображення історії замовлень
+// Відображення історії замовлень (Оновлено для Фази 6)
 function renderOrdersHistory() {
     const tbody = document.getElementById('orders-list');
     if (!tbody) return;
@@ -736,9 +737,9 @@ function renderOrdersHistory() {
 
     try {
         const res = db.exec(`
-            SELECT o.order_id, o.order_date, c.name, o.status, o.total_amount 
+            SELECT o.order_id, o.order_date, c.name, o.status, o.total_amount
             FROM orders o
-            JOIN customers c ON o.customer_id = c.customer_id
+                     JOIN customers c ON o.customer_id = c.customer_id
             ORDER BY o.order_id DESC
         `);
 
@@ -746,17 +747,27 @@ function renderOrdersHistory() {
 
         res[0].values.forEach(row => {
             const [id, date, customer, status, total] = row;
-            // Форматуємо дату для зручності
             const formattedDate = new Date(date).toLocaleString('uk-UA');
+
+            // Динамічний селект для статусу
+            const statusSelect = `
+                <select onchange="changeOrderStatus(${id}, this.value)" style="padding: 4px; border-radius: 4px;">
+                    <option value="Нове" ${status === 'Нове' ? 'selected' : ''}>Нове</option>
+                    <option value="В обробці" ${status === 'В обробці' ? 'selected' : ''}>В обробці</option>
+                    <option value="Виконано" ${status === 'Виконано' ? 'selected' : ''}>Виконано</option>
+                    <option value="Скасовано" ${status === 'Скасовано' ? 'selected' : ''}>Скасовано</option>
+                </select>
+            `;
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><b>#${id}</b></td>
                 <td>${formattedDate}</td>
                 <td>${customer}</td>
-                <td>${status}</td>
+                <td>${statusSelect}</td>
                 <td><b>${total.toFixed(2)} грн</b></td>
                 <td>
+                    <button class="btn-save" style="background-color: #8e44ad; padding: 0.3rem 0.6rem;" onclick="viewOrderDetails(${id})">📄 Деталі</button>
                     <button class="btn-delete" onclick="deleteOrder(${id})">Вид.</button>
                 </td>
             `;
@@ -779,5 +790,142 @@ function deleteOrder(orderId) {
         } catch (e) {
             alert("Помилка при видаленні: " + e.message);
         }
+    }
+}
+
+// ==========================================
+// ФАЗА 6: ДЕТАЛІ, ДРУК ТА СТАТУСИ
+// ==========================================
+
+// Зміна статусу замовлення
+function changeOrderStatus(orderId, newStatus) {
+    try {
+        db.run("UPDATE orders SET status = ? WHERE order_id = ?", [newStatus, orderId]);
+        // Сповіщення можна не виводити, щоб не дратувати користувача при кожному кліку
+        console.log(`Статус замовлення #${orderId} змінено на '${newStatus}'`);
+    } catch(e) {
+        alert("Помилка зміни статусу: " + e.message);
+    }
+}
+
+// Завантаження деталей замовлення та відкриття модалки
+function viewOrderDetails(orderId) {
+    try {
+        // 1. Отримуємо загальні дані замовлення та реквізити клієнта
+        const orderRes = db.exec(`
+            SELECT o.order_id, o.order_date, o.status, o.markup_percent, o.delivery_cost, o.total_amount,
+                   c.name, c.phone, c.email, c.address
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            WHERE o.order_id = ${orderId}
+        `);
+
+        if (orderRes.length === 0) {
+            alert("Замовлення не знайдено!"); return;
+        }
+
+        const [id, date, status, markup, delivery, total, cName, cPhone, cEmail, cAddress] = orderRes[0].values[0];
+
+        // 2. Отримуємо список товарів (з таблиці order_items)
+        const itemsRes = db.exec(`
+            SELECT p.name, oi.quantity, oi.price, u.short_name
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.product_id
+            JOIN units u ON p.unit_id = u.unit_id
+            WHERE oi.order_id = ${orderId}
+        `);
+
+        // 3. Формуємо HTML таблицю товарів для рахунку
+        let itemsHtml = '';
+        let subtotal = 0;
+
+        if (itemsRes.length > 0) {
+            itemsRes[0].values.forEach((item, index) => {
+                const [pName, qty, price, unit] = item;
+                const sum = qty * price;
+                subtotal += sum;
+                itemsHtml += `
+                    <tr>
+                        <td style="text-align: center;">${index + 1}</td>
+                        <td>${pName}</td>
+                        <td style="text-align: center;">${qty} ${unit}</td>
+                        <td style="text-align: right;">${price.toFixed(2)}</td>
+                        <td style="text-align: right;">${sum.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // 4. Генеруємо повний документ
+        const printArea = document.getElementById('print-area');
+        printArea.innerHTML = `
+            <div class="invoice-header">
+                <h2>Замовлення / Специфікація №${id}</h2>
+                <p>від ${new Date(date).toLocaleString('uk-UA')}</p>
+            </div>
+            
+            <div class="invoice-details">
+                <div style="flex: 1;">
+                    <h3>Постачальник:</h3>
+                    <p><strong>ФОП (КВЕД 46.13)</strong></p>
+                    <p>Каталог будівельних матеріалів</p>
+                </div>
+                <div style="flex: 1; text-align: right;">
+                    <h3>Покупець:</h3>
+                    <p><strong>${cName}</strong></p>
+                    <p>${cPhone || 'Телефон не вказано'}</p>
+                    <p>${cAddress || 'Адреса не вказана'}</p>
+                </div>
+            </div>
+            
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">№</th>
+                        <th style="width: 45%;">Найменування товару</th>
+                        <th style="width: 15%; text-align: center;">К-ть</th>
+                        <th style="width: 15%; text-align: right;">Ціна (грн)</th>
+                        <th style="width: 20%; text-align: right;">Сума (грн)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHtml}
+                </tbody>
+            </table>
+            
+            <div style="text-align: right; margin-bottom: 1.5rem; line-height: 1.6;">
+                <p>Всього за товарами: <b>${subtotal.toFixed(2)} грн</b></p>
+                <p>Комісія постачальника (${markup}%): <b>${(subtotal * (markup/100)).toFixed(2)} грн</b></p>
+                <p>Доставка: <b>${delivery.toFixed(2)} грн</b></p>
+            </div>
+            
+            <div class="invoice-total">
+                Загальна сума до сплати: ${total.toFixed(2)} грн
+            </div>
+            
+            <div style="margin-top: 4rem; display: flex; justify-content: space-between; border-top: 1px solid #eee; padding-top: 2rem;">
+                <p>Виписав(ла): ___________________ (Підпис)</p>
+                <p>Отримав(ла): ___________________ (Підпис)</p>
+            </div>
+        `;
+
+        // Відкриваємо модалку
+        document.getElementById('order-modal').style.display = 'block';
+
+    } catch (e) {
+        alert("Помилка завантаження деталей: " + e.message);
+    }
+}
+
+// Функція закриття модалки
+function closeOrderModal() {
+    document.getElementById('order-modal').style.display = 'none';
+}
+
+// Закриття модалки при кліку на темний фон поза нею
+window.onclick = function(event) {
+    const modal = document.getElementById('order-modal');
+    if (event.target == modal) {
+        closeOrderModal();
     }
 }
