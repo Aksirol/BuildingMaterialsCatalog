@@ -20,13 +20,17 @@ initSqlJs(config).then(function(SQL) {
     // 1. СПОЧАТКУ створюємо таблиці
     createTables();
 
-    // 2. Сповіщаємо про успіх
-    document.getElementById('catalog-content').innerHTML = "<p>База даних успішно ініціалізована!</p>";
+    // 2. Сповіщаємо про успіх (БЕЗПЕЧНА ПЕРЕВІРКА)
+    const initMessageBlock = document.getElementById('catalog-content');
+    if (initMessageBlock) {
+        initMessageBlock.innerHTML = "<p>База даних успішно ініціалізована!</p>";
+    }
+
     console.log("SQLite БД ініціалізована та таблиці створені.");
 
-    // 3. Лише тепер можна маніпулювати інтерфейсом
-    // (Необов'язково: можна відразу відкривати довідники після старту)
-    // showSection('dictionaries');
+    // 3. Завантажуємо дані для Фази 3 (щоб каталог не був порожнім при старті)
+    if (typeof populateSelects === 'function') populateSelects();
+    if (typeof renderProducts === 'function') renderProducts();
 
 }).catch(function(err) {
     console.error("Помилка ініціалізації бази даних:", err);
@@ -243,4 +247,185 @@ function renderUnits() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+// ==========================================
+// ФАЗА 3: МОДУЛЬ КАТАЛОГУ ТОВАРІВ
+// ==========================================
+
+// Оновлюємо перевизначену функцію навігації, щоб вона вантажила і каталог
+const originalShowSectionForPhase3 = showSection;
+showSection = function(sectionId) {
+    originalShowSectionForPhase3(sectionId);
+
+    if (sectionId === 'catalog') {
+        populateSelects(); // Оновлюємо випадаючі списки
+        renderProducts();  // Завантажуємо товари
+    }
+};
+
+// Заповнення випадаючих списків категорій та одиниць
+function populateSelects() {
+    const catSelect = document.getElementById('product_category');
+    const filterSelect = document.getElementById('filter-category');
+    const unitSelect = document.getElementById('product_unit');
+
+    if (!catSelect || !filterSelect || !unitSelect) return;
+
+    // Отримуємо категорії
+    const cats = db.exec("SELECT category_id, name FROM categories");
+    let catOptions = '<option value="">Оберіть категорію*</option>';
+    let filterOptions = '<option value="">Всі категорії</option>';
+
+    if (cats.length > 0) {
+        cats[0].values.forEach(row => {
+            catOptions += `<option value="${row[0]}">${row[1]}</option>`;
+            filterOptions += `<option value="${row[0]}">${row[1]}</option>`;
+        });
+    }
+    catSelect.innerHTML = catOptions;
+    filterSelect.innerHTML = filterOptions;
+
+    // Отримуємо одиниці виміру
+    const units = db.exec("SELECT unit_id, short_name FROM units");
+    let unitOptions = '<option value="">Одиниці виміру*</option>';
+
+    if (units.length > 0) {
+        units[0].values.forEach(row => {
+            unitOptions += `<option value="${row[0]}">${row[1]}</option>`;
+        });
+    }
+    unitSelect.innerHTML = unitOptions;
+}
+
+// Збереження товару (Створення / Оновлення)
+function saveProduct(event) {
+    event.preventDefault();
+
+    const id = document.getElementById('product_id').value;
+    const name = document.getElementById('product_name').value.trim();
+    const article = document.getElementById('product_article').value.trim();
+    const price = parseFloat(document.getElementById('product_price').value);
+    const cat_id = document.getElementById('product_category').value;
+    const unit_id = document.getElementById('product_unit').value;
+    const desc = document.getElementById('product_desc').value.trim();
+    const image = document.getElementById('product_image').value.trim();
+    const in_stock = document.getElementById('product_instock').checked ? 1 : 0;
+
+    try {
+        if (id) {
+            db.run(`UPDATE products SET 
+                    name = ?, article = ?, price = ?, category_id = ?, unit_id = ?, 
+                    description = ?, image = ?, in_stock = ? 
+                    WHERE product_id = ?`,
+                [name, article, price, cat_id, unit_id, desc, image, in_stock, id]);
+        } else {
+            db.run(`INSERT INTO products 
+                    (name, article, price, category_id, unit_id, description, image, in_stock) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [name, article, price, cat_id, unit_id, desc, image, in_stock]);
+        }
+        clearProductForm();
+        renderProducts();
+    } catch (e) {
+        if (e.message.includes("UNIQUE constraint failed")) {
+            alert("Помилка: Товар з таким артикулом вже існує!");
+        } else {
+            alert("Помилка при збереженні товару: " + e.message);
+        }
+    }
+}
+
+// Видалення товару
+function deleteProduct(id) {
+    if (confirm("Видалити цей товар?")) {
+        try {
+            db.run("DELETE FROM products WHERE product_id = ?", [id]);
+            renderProducts();
+        } catch (e) {
+            alert("Помилка! Можливо товар вже доданий до замовлення.");
+        }
+    }
+}
+
+// Підготовка до редагування
+function editProduct(id, name, article, price, cat_id, unit_id, desc, image, in_stock) {
+    document.getElementById('product_id').value = id;
+    document.getElementById('product_name').value = name;
+    document.getElementById('product_article').value = article !== 'null' ? article : '';
+    document.getElementById('product_price').value = price;
+    document.getElementById('product_category').value = cat_id;
+    document.getElementById('product_unit').value = unit_id;
+    document.getElementById('product_desc').value = desc !== 'null' ? desc : '';
+    document.getElementById('product_image').value = image !== 'null' ? image : '';
+    document.getElementById('product_instock').checked = parseInt(in_stock) === 1;
+}
+
+function clearProductForm() {
+    document.getElementById('product-form').reset();
+    document.getElementById('product_id').value = "";
+}
+
+// Відмальовування таблиці товарів з пошуком та фільтрацією
+function renderProducts() {
+    const tbody = document.getElementById('products-list');
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    const searchQuery = document.getElementById('search-product').value.toLowerCase();
+    const catFilter = document.getElementById('filter-category').value;
+
+    // Базовий запит із JOIN для підтягування назв довідників
+    let sql = `
+        SELECT p.product_id, p.name, p.article, p.price, p.description, p.image, p.in_stock,
+               c.name as cat_name, u.short_name as unit_name, p.category_id, p.unit_id
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        LEFT JOIN units u ON p.unit_id = u.unit_id
+        WHERE 1=1
+    `;
+    let params = [];
+
+    // Динамічне додавання умов фільтрації
+    if (searchQuery) {
+        sql += ` AND (LOWER(p.name) LIKE ? OR LOWER(p.article) LIKE ?)`;
+        params.push(`%${searchQuery}%`, `%${searchQuery}%`);
+    }
+    if (catFilter) {
+        sql += ` AND p.category_id = ?`;
+        params.push(catFilter);
+    }
+
+    try {
+        // У sql.js для SELECT з параметрами використовуємо prepare + bind + step
+        const stmt = db.prepare(sql);
+        stmt.bind(params);
+
+        while (stmt.step()) {
+            const row = stmt.get();
+            const [id, name, article, price, desc, image, in_stock, cat_name, unit_name, cat_id, unit_id] = row;
+
+            const imgSrc = image ? image : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="%23ddd"><rect width="50" height="50"/></svg>';
+            const stockBadge = in_stock ? '<span class="badge-yes">Так</span>' : '<span class="badge-no">Ні</span>';
+            const safeArticle = article || '-';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><img src="${imgSrc}" class="product-thumb" alt="фото"></td>
+                <td>${safeArticle}</td>
+                <td><strong>${name}</strong></td>
+                <td>${cat_name}</td>
+                <td>${price.toFixed(2)} / ${unit_name}</td>
+                <td>${stockBadge}</td>
+                <td>
+                    <button class="btn-edit" onclick="editProduct(${id}, '${name}', '${article}', ${price}, ${cat_id}, ${unit_id}, '${desc}', '${image}', ${in_stock})">Ред.</button>
+                    <button class="btn-delete" onclick="deleteProduct(${id})">Вид.</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+        stmt.free(); // Звільняємо пам'ять після виконання запиту
+    } catch (e) {
+        console.error("Помилка завантаження товарів:", e);
+    }
 }

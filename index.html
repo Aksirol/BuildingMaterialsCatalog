@@ -18,13 +18,71 @@
 
         <button onclick="runAutomatedTests()" style="background-color: #f39c12;">Тести Ф-1</button>
         <button onclick="runPhase2Tests()" style="background-color: #f39c12;">Тести Ф-2</button>
+        <button onclick="runPhase3Tests()" style="background-color: #f39c12;">Тести Ф-3</button>
     </nav>
 </header>
 
 <main id="app-content">
     <section id="catalog" class="section active">
         <h2>Каталог товарів</h2>
-        <div id="catalog-content">Завантаження бази даних...</div>
+
+        <div class="catalog-toolbar">
+            <input type="text" id="search-product" placeholder="Пошук за назвою або артикулом..." oninput="renderProducts()">
+            <select id="filter-category" onchange="renderProducts()">
+                <option value="">Всі категорії</option>
+            </select>
+        </div>
+
+        <div class="form-container">
+            <h3>Додати / Редагувати товар</h3>
+            <form id="product-form" onsubmit="saveProduct(event)">
+                <input type="hidden" id="product_id">
+
+                <div class="form-row">
+                    <input type="text" id="product_name" placeholder="Назва товару*" required>
+                    <input type="text" id="product_article" placeholder="Артикул">
+                    <input type="number" step="0.01" min="0" id="product_price" placeholder="Ціна*" required>
+                </div>
+
+                <div class="form-row">
+                    <select id="product_category" required>
+                        <option value="">Оберіть категорію*</option>
+                    </select>
+                    <select id="product_unit" required>
+                        <option value="">Одиниці виміру*</option>
+                    </select>
+                    <input type="text" id="product_image" placeholder="URL зображення">
+                </div>
+
+                <div class="form-row">
+                    <input type="text" id="product_desc" placeholder="Опис товару" style="flex: 2;">
+                    <label class="checkbox-label" style="flex: 1;">
+                        <input type="checkbox" id="product_instock" checked> В наявності
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-save">Зберегти товар</button>
+                    <button type="button" class="btn-clear" onclick="clearProductForm()">Очистити</button>
+                </div>
+            </form>
+        </div>
+
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Фото</th>
+                <th>Артикул</th>
+                <th>Назва</th>
+                <th>Категорія</th>
+                <th>Ціна</th>
+                <th>Наявність</th>
+                <th>Дії</th>
+            </tr>
+            </thead>
+            <tbody id="products-list">
+            </tbody>
+        </table>
     </section>
 
     <section id="dictionaries" class="section" style="display: none;">

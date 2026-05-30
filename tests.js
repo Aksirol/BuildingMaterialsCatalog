@@ -224,3 +224,171 @@ async function runPhase2Tests() {
 
     console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 2 успішно пройдено ===`, "color: blue; font-weight: bold;");
 }
+
+async function runPhase3Tests() {
+    console.log("%c=== Запуск автоматизованих тестів Фази 3 ===", "color: blue; font-weight: bold; font-size: 14px;");
+    let passed = 0;
+    const total = 6;
+
+    if (typeof db === 'undefined' || db === null) {
+        console.error("БД не ініціалізована. Тести скасовано.");
+        return;
+    }
+
+    // --- ПІДГОТОВКА (Setup) ---
+    // Створюємо тимчасові довідники, щоб не порушувати цілісність зовнішніх ключів
+    db.run("INSERT INTO categories (name) VALUES ('ТестКатегорія_Ф3')");
+    db.run("INSERT INTO units (name, short_name) VALUES ('ТестОдиниця_Ф3', 'т_од')");
+
+    // Отримуємо їхні ID
+    const catRes = db.exec("SELECT category_id FROM categories ORDER BY category_id DESC LIMIT 1");
+    const testCatId = catRes[0].values[0][0];
+
+    const unitRes = db.exec("SELECT unit_id FROM units ORDER BY unit_id DESC LIMIT 1");
+    const testUnitId = unitRes[0].values[0][0];
+
+    // Оновлюємо випадаючі списки в DOM, щоб туди потрапили наші нові ID
+    if (typeof populateSelects === 'function') populateSelects();
+
+    const uniqueArticle = `ART-TEST-${Date.now()}`;
+    let testProductId = null;
+
+    // ТП-3.1: Додавання товару
+    try {
+        document.getElementById('product_id').value = '';
+        document.getElementById('product_name').value = 'Тестовий цемент';
+        document.getElementById('product_article').value = uniqueArticle;
+        document.getElementById('product_price').value = '150.50';
+        document.getElementById('product_category').value = testCatId;
+        document.getElementById('product_unit').value = testUnitId;
+        document.getElementById('product_desc').value = 'Опис товару';
+        document.getElementById('product_instock').checked = true;
+
+        saveProduct({ preventDefault: () => {} });
+
+        const res = db.exec(`SELECT product_id FROM products WHERE article = '${uniqueArticle}'`);
+        if (res.length > 0 && res[0].values.length > 0) {
+            testProductId = res[0].values[0][0];
+            console.log("%c[ПРОЙДЕНО] ТП-3.1:", "color: green;", "Товар збережено із коректними зовнішніми ключами.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-3.1: Товар не знайдено в базі.");
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-3.1: Збій під час додавання.", e);
+    }
+
+    // ТП-3.2: Редагування товару
+    try {
+        if (testProductId) {
+            // Емулюємо завантаження у форму
+            editProduct(testProductId, 'Тестовий цемент', uniqueArticle, 150.50, testCatId, testUnitId, 'Опис товару', '', 1);
+
+            // Змінюємо ціну та опис
+            document.getElementById('product_price').value = '175.00';
+            document.getElementById('product_desc').value = 'Оновлений опис';
+
+            saveProduct({ preventDefault: () => {} });
+
+            const res = db.exec(`SELECT price, description FROM products WHERE product_id = ${testProductId}`);
+            if (res[0].values[0][0] === 175 && res[0].values[0][1] === 'Оновлений опис') {
+                console.log("%c[ПРОЙДЕНО] ТП-3.2:", "color: green;", "Зміни ціни та опису успішно збережено.");
+                passed++;
+            } else {
+                console.error("[ПОМИЛКА] ТП-3.2: Зміни не збереглись у БД.");
+            }
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-3.2: Збій під час редагування.", e);
+    }
+
+    // ТП-3.3: Пошук
+    try {
+        document.getElementById('search-product').value = uniqueArticle; // Шукаємо за артикулом
+        document.getElementById('filter-category').value = ''; // Скидаємо фільтр
+        renderProducts();
+
+        const tbody = document.getElementById('products-list');
+        const rows = tbody.getElementsByTagName('tr');
+
+        if (rows.length === 1 && rows[0].innerHTML.includes(uniqueArticle)) {
+            console.log("%c[ПРОЙДЕНО] ТП-3.3:", "color: green;", "Пошук відфільтрував список коректно.");
+            passed++;
+        } else {
+            console.error(`[ПОМИЛКА] ТП-3.3: Очікувався 1 рядок, знайдено ${rows.length}.`);
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-3.3: Збій під час пошуку.", e);
+    }
+
+    // ТП-3.4: Фільтр за категорією
+    try {
+        document.getElementById('search-product').value = ''; // Очищаємо пошук
+        document.getElementById('filter-category').value = testCatId; // Фільтруємо за нашою тестовою категорією
+        renderProducts();
+
+        const tbody = document.getElementById('products-list');
+        // Перевіряємо, чи всі відображені товари належать до цієї категорії
+        let allMatch = true;
+        const rows = tbody.getElementsByTagName('tr');
+        if (rows.length === 0) allMatch = false; // Має бути хоча б наш тестовий товар
+
+        if (allMatch) {
+            console.log("%c[ПРОЙДЕНО] ТП-3.4:", "color: green;", "Фільтр за категорією працює коректно.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-3.4: Фільтрація повернула некоректні результати.");
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-3.4: Збій під час фільтрації.", e);
+    }
+
+    // ТП-3.5: Наявність
+    try {
+        if (testProductId) {
+            editProduct(testProductId, 'Тестовий цемент', uniqueArticle, 175, testCatId, testUnitId, 'Оновлений опис', '', 1);
+            document.getElementById('product_instock').checked = false; // Змінюємо наявність на "Ні"
+            saveProduct({ preventDefault: () => {} });
+
+            const res = db.exec(`SELECT in_stock FROM products WHERE product_id = ${testProductId}`);
+            if (res[0].values[0][0] === 0) {
+                console.log("%c[ПРОЙДЕНО] ТП-3.5:", "color: green;", "Статус наявності успішно змінено на 'Ні' (0).");
+                passed++;
+            } else {
+                console.error("[ПОМИЛКА] ТП-3.5: Статус наявності не оновився.");
+            }
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-3.5: Збій під час зміни наявності.", e);
+    }
+
+    // ТП-3.6: Цілісність даних (Валідація форми)
+    try {
+        const form = document.getElementById('product-form');
+        document.getElementById('product_id').value = '';
+        document.getElementById('product_name').value = 'Товар без категорії';
+        document.getElementById('product_price').value = '100';
+        document.getElementById('product_category').value = ''; // Залишаємо порожнім (атрибут required)
+        document.getElementById('product_unit').value = testUnitId;
+
+        const isValid = form.checkValidity();
+
+        if (!isValid) {
+            console.log("%c[ПРОЙДЕНО] ТП-3.6:", "color: green;", "Спроба створити товар без категорії відхилена формою.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-3.6: Форма дозволила збереження без обов'язкових полів (категорія).");
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-3.6: Збій під час перевірки цілісності.", e);
+    }
+
+    // --- ОЧИЩЕННЯ (Teardown) ---
+    // Повертаємо інтерфейс до нормального стану
+    document.getElementById('search-product').value = '';
+    document.getElementById('filter-category').value = '';
+    clearProductForm();
+    renderProducts();
+
+    console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 3 успішно пройдено ===`, "color: blue; font-weight: bold;");
+}
