@@ -20,6 +20,7 @@
         <button onclick="runPhase2Tests()" style="background-color: #f39c12;">Тести Ф-2</button>
         <button onclick="runPhase3Tests()" style="background-color: #f39c12;">Тести Ф-3</button>
         <button onclick="runPhase4Tests()" style="background-color: #f39c12;">Тести Ф-4</button>
+        <button onclick="runPhase5Tests()" style="background-color: #e74c3c; color: white; font-weight: bold;">Тести Ф-5</button>
     </nav>
 </header>
 
@@ -179,8 +180,88 @@
     </section>
 
     <section id="orders" class="section" style="display: none;">
-        <h2>Замовлення</h2>
-        <div id="orders-content">Список замовлень</div>
+        <h2>Замовлення та Калькулятор</h2>
+
+        <div class="order-builder-container">
+            <div class="order-form-panel">
+                <h3>1. Параметри замовлення</h3>
+                <div class="form-row">
+                    <select id="order_customer" required>
+                        <option value="">Оберіть клієнта*</option>
+                    </select>
+                    <select id="order_status">
+                        <option value="Нове">Нове</option>
+                        <option value="В обробці">В обробці</option>
+                        <option value="Виконано">Виконано</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.8rem; color: #7f8c8d;">Націнка / Комісія (%)</label>
+                        <input type="number" step="0.1" min="0" id="order_markup" placeholder="Націнка (%)" value="0" oninput="calculateTotal()">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.8rem; color: #7f8c8d;">Вартість доставки (грн)</label>
+                        <input type="number" step="0.01" min="0" id="order_delivery" placeholder="Доставка (грн)" value="0" oninput="calculateTotal()">
+                    </div>
+                </div>
+
+                <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid #eee;">
+
+                <h3>2. Додати товар</h3>
+                <div class="form-row">
+                    <select id="order_product" style="flex: 2;">
+                        <option value="">Оберіть товар з каталогу</option>
+                    </select>
+                    <input type="number" step="0.01" min="0.01" id="order_quantity" placeholder="Кількість" value="1" style="flex: 1;">
+                </div>
+                <button type="button" class="btn-save" style="width: 100%; background-color: #3498db;" onclick="addOrderItem()">Додати до кошика ⬇</button>
+            </div>
+
+            <div class="order-cart-panel">
+                <h3>3. Позиції замовлення (Кошик)</h3>
+                <table class="data-table" id="cart-table">
+                    <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>К-ть</th>
+                        <th>Ціна</th>
+                        <th>Сума</th>
+                        <th>Дії</th>
+                    </tr>
+                    </thead>
+                    <tbody id="cart-items">
+                    <tr><td colspan="5" style="text-align: center; color: #7f8c8d;">Кошик порожній</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="order-summary">
+                    <p>Сума позицій: <span id="summary_subtotal">0.00</span></p>
+                    <p>Сума націнки: <span id="summary_markup">0.00</span></p>
+                    <p>Доставка: <span id="summary_delivery">0.00</span></p>
+                    <h3 class="total-price">Підсумок: <span id="summary_total">0.00</span> грн</h3>
+                    <button type="button" class="btn-save" style="width: 100%; margin-top: 1rem; padding: 1rem; font-size: 1.1rem;" onclick="saveOrder()">ЗБЕРЕГТИ ЗАМОВЛЕННЯ</button>
+                </div>
+            </div>
+        </div>
+
+        <hr style="margin: 2rem 0;">
+
+        <h3>Історія замовлень</h3>
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Дата</th>
+                <th>Клієнт</th>
+                <th>Статус</th>
+                <th>Сума</th>
+                <th>Дії</th>
+            </tr>
+            </thead>
+            <tbody id="orders-list">
+            </tbody>
+        </table>
     </section>
 </main>
 

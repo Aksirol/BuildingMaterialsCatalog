@@ -213,3 +213,41 @@ button.btn-edit {
     border-radius: 12px;
     font-size: 0.8rem;
 }
+
+/* --- ФАЗА 5: Замовлення та Калькулятор --- */
+.order-builder-container {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.order-form-panel, .order-cart-panel {
+    flex: 1;
+    min-width: 350px;
+    background: #fdfdfd;
+    padding: 1.5rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.order-summary {
+    background: #ecf0f1;
+    padding: 1rem 1.5rem;
+    border-radius: 6px;
+    margin-top: 1.5rem;
+    text-align: right;
+}
+
+.order-summary p {
+    margin: 0.5rem 0;
+    color: #34495e;
+}
+
+.total-price {
+    color: #2c3e50;
+    font-size: 1.5rem;
+    border-top: 2px solid #bdc3c7;
+    padding-top: 0.8rem;
+    margin-bottom: 0;
+}

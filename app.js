@@ -533,3 +533,251 @@ function renderCustomers() {
         console.error("Помилка завантаження клієнтів:", e);
     }
 }
+
+// ==========================================
+// ФАЗА 5: МОДУЛЬ ЗАМОВЛЕНЬ ТА КАЛЬКУЛЯТОР
+// ==========================================
+
+// Глобальний масив для тимчасового зберігання позицій перед збереженням замовлення
+let currentCart = [];
+
+// Оновлюємо навігацію
+const originalShowSectionForPhase5 = showSection;
+showSection = function(sectionId) {
+    originalShowSectionForPhase5(sectionId);
+    if (sectionId === 'orders') {
+        populateOrderSelects();
+        renderOrdersHistory();
+    }
+};
+
+// Заповнення списків клієнтів та товарів у формі замовлення
+function populateOrderSelects() {
+    const custSelect = document.getElementById('order_customer');
+    const prodSelect = document.getElementById('order_product');
+    if (!custSelect || !prodSelect) return;
+
+    // Клієнти
+    const customers = db.exec("SELECT customer_id, name FROM customers");
+    let custOptions = '<option value="">Оберіть клієнта*</option>';
+    if (customers.length > 0) {
+        customers[0].values.forEach(row => {
+            custOptions += `<option value="${row[0]}">${row[1]}</option>`;
+        });
+    }
+    custSelect.innerHTML = custOptions;
+
+    // Товари (Зберігаємо поточну ціну та одиницю виміру в data-атрибутах!)
+    const products = db.exec(`
+        SELECT p.product_id, p.name, p.price, u.short_name 
+        FROM products p 
+        LEFT JOIN units u ON p.unit_id = u.unit_id
+    `);
+    let prodOptions = '<option value="">Оберіть товар з каталогу</option>';
+    if (products.length > 0) {
+        products[0].values.forEach(row => {
+            const [id, name, price, unit] = row;
+            // Фіксуємо ціну в data-price, щоб використати її при додаванні в кошик
+            prodOptions += `<option value="${id}" data-price="${price}" data-unit="${unit}">${name} (${price} грн/${unit})</option>`;
+        });
+    }
+    prodSelect.innerHTML = prodOptions;
+}
+
+// Додавання товару до кошика
+function addOrderItem() {
+    const prodSelect = document.getElementById('order_product');
+    const qtyInput = document.getElementById('order_quantity');
+
+    const productId = prodSelect.value;
+    const quantity = parseFloat(qtyInput.value);
+
+    if (!productId || isNaN(quantity) || quantity <= 0) {
+        alert("Оберіть товар та вкажіть коректну кількість.");
+        return;
+    }
+
+    const selectedOption = prodSelect.options[prodSelect.selectedIndex];
+    const price = parseFloat(selectedOption.getAttribute('data-price'));
+    const name = selectedOption.text.split(' (')[0]; // Беремо чисту назву
+    const unit = selectedOption.getAttribute('data-unit');
+
+    // Перевіряємо, чи є вже такий товар у кошику. Якщо так - збільшуємо кількість
+    const existingItemIndex = currentCart.findIndex(item => item.product_id === productId);
+    if (existingItemIndex > -1) {
+        currentCart[existingItemIndex].quantity += quantity;
+    } else {
+        // Фіксація ціни відбувається тут
+        currentCart.push({
+            product_id: productId,
+            name: name,
+            unit: unit,
+            quantity: quantity,
+            price: price
+        });
+    }
+
+    // Скидаємо поля вибору
+    prodSelect.value = '';
+    qtyInput.value = '1';
+
+    renderCart();
+}
+
+// Видалення товару з кошика
+function removeOrderItem(index) {
+    currentCart.splice(index, 1);
+    renderCart();
+}
+
+// Відмальовування кошика та виклик перерахунку
+function renderCart() {
+    const tbody = document.getElementById('cart-items');
+    tbody.innerHTML = '';
+
+    if (currentCart.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #7f8c8d;">Кошик порожній</td></tr>';
+        calculateTotal();
+        return;
+    }
+
+    currentCart.forEach((item, index) => {
+        const sum = item.price * item.quantity;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.name}</td>
+            <td>${item.quantity} ${item.unit}</td>
+            <td>${item.price.toFixed(2)}</td>
+            <td><strong>${sum.toFixed(2)}</strong></td>
+            <td><button class="btn-delete" onclick="removeOrderItem(${index})">✕</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    calculateTotal();
+}
+
+// Калькулятор вартості (Формула з ТЗ)
+function calculateTotal() {
+    // 1. Сума позицій
+    const subtotal = currentCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    // 2. Отримуємо націнку і доставку з форми
+    const markupPercent = parseFloat(document.getElementById('order_markup').value) || 0;
+    const deliveryCost = parseFloat(document.getElementById('order_delivery').value) || 0;
+
+    // 3. Формула: сума позицій * (1 + націнка / 100) + доставка
+    const markupValue = subtotal * (markupPercent / 100);
+    const totalAmount = subtotal + markupValue + deliveryCost;
+
+    // 4. Оновлюємо інтерфейс
+    document.getElementById('summary_subtotal').innerText = subtotal.toFixed(2);
+    document.getElementById('summary_markup').innerText = markupValue.toFixed(2);
+    document.getElementById('summary_delivery').innerText = deliveryCost.toFixed(2);
+    document.getElementById('summary_total').innerText = totalAmount.toFixed(2);
+}
+
+// Збереження замовлення у БД (orders + order_items)
+function saveOrder() {
+    const customerId = document.getElementById('order_customer').value;
+    if (!customerId) {
+        alert("Помилка: Оберіть клієнта!");
+        return;
+    }
+    if (currentCart.length === 0) {
+        alert("Помилка: Додайте хоча б один товар до замовлення!");
+        return;
+    }
+
+    const status = document.getElementById('order_status').value;
+    const markup = parseFloat(document.getElementById('order_markup').value) || 0;
+    const delivery = parseFloat(document.getElementById('order_delivery').value) || 0;
+    const totalAmount = parseFloat(document.getElementById('summary_total').innerText);
+
+    try {
+        // 1. Зберігаємо головний запис у таблицю orders
+        db.run(`INSERT INTO orders (customer_id, markup_percent, delivery_cost, status, total_amount) 
+                VALUES (?, ?, ?, ?, ?)`,
+            [customerId, markup, delivery, status, totalAmount]);
+
+        // 2. Отримуємо ID щойно створеного замовлення (last_insert_rowid)
+        const res = db.exec("SELECT last_insert_rowid()");
+        const newOrderId = res[0].values[0][0];
+
+        // 3. Зберігаємо всі товари з кошика у таблицю order_items
+        currentCart.forEach(item => {
+            db.run(`INSERT INTO order_items (order_id, product_id, quantity, price) 
+                    VALUES (?, ?, ?, ?)`,
+                [newOrderId, item.product_id, item.quantity, item.price]);
+        });
+
+        alert("Замовлення успішно збережено!");
+
+        // Очищаємо форму та кошик
+        currentCart = [];
+        document.getElementById('order_customer').value = '';
+        document.getElementById('order_status').value = 'Нове';
+        document.getElementById('order_markup').value = '0';
+        document.getElementById('order_delivery').value = '0';
+        renderCart(); // Очистить таблицю і обнулить підсумки
+        renderOrdersHistory(); // Оновить список
+
+    } catch (e) {
+        alert("Помилка при збереженні замовлення: " + e.message);
+        console.error(e);
+    }
+}
+
+// Відображення історії замовлень
+function renderOrdersHistory() {
+    const tbody = document.getElementById('orders-list');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    try {
+        const res = db.exec(`
+            SELECT o.order_id, o.order_date, c.name, o.status, o.total_amount 
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            ORDER BY o.order_id DESC
+        `);
+
+        if (res.length === 0) return;
+
+        res[0].values.forEach(row => {
+            const [id, date, customer, status, total] = row;
+            // Форматуємо дату для зручності
+            const formattedDate = new Date(date).toLocaleString('uk-UA');
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><b>#${id}</b></td>
+                <td>${formattedDate}</td>
+                <td>${customer}</td>
+                <td>${status}</td>
+                <td><b>${total.toFixed(2)} грн</b></td>
+                <td>
+                    <button class="btn-delete" onclick="deleteOrder(${id})">Вид.</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error("Помилка завантаження історії:", e);
+    }
+}
+
+// Видалення замовлення (спочатку позиції, потім саме замовлення)
+function deleteOrder(orderId) {
+    if (confirm("Видалити це замовлення?")) {
+        try {
+            // Спочатку видаляємо зв'язані позиції (через Foreign Key)
+            db.run("DELETE FROM order_items WHERE order_id = ?", [orderId]);
+            // Потім саме замовлення
+            db.run("DELETE FROM orders WHERE order_id = ?", [orderId]);
+            renderOrdersHistory();
+        } catch (e) {
+            alert("Помилка при видаленні: " + e.message);
+        }
+    }
+}

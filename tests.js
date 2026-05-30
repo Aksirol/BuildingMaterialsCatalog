@@ -523,3 +523,195 @@ async function runPhase4Tests() {
 
     console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 4 успішно пройдено ===`, "color: blue; font-weight: bold;");
 }
+
+async function runPhase5Tests() {
+    console.log("%c=== Запуск автоматизованих тестів Фази 5 ===", "color: blue; font-weight: bold; font-size: 14px;");
+    let passed = 0;
+    const total = 8;
+
+    if (typeof db === 'undefined' || db === null) {
+        console.error("БД не ініціалізована. Тести скасовано.");
+        return;
+    }
+
+    // --- ПІДГОТОВКА (Setup) ---
+    // Створюємо ізольовані дані, щоб не залежати від попередніх кліків користувача
+    db.run("INSERT INTO categories (name) VALUES ('ТестКат_Ф5')");
+    const catId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    db.run("INSERT INTO units (name, short_name) VALUES ('ТестОд_Ф5', 'од')");
+    const unitId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    db.run("INSERT INTO customers (name) VALUES ('ТестКлієнт_Ф5')");
+    const custId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    // Товар 1: 100 грн, Товар 2: 200 грн
+    db.run(`INSERT INTO products (name, price, category_id, unit_id) VALUES ('Товар 1 (Ф5)', 100, ${catId}, ${unitId})`);
+    const prod1Id = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    db.run(`INSERT INTO products (name, price, category_id, unit_id) VALUES ('Товар 2 (Ф5)', 200, ${catId}, ${unitId})`);
+    const prod2Id = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+
+    // Оновлюємо списки у формі
+    if (typeof populateOrderSelects === 'function') populateOrderSelects();
+
+    // Допоміжна функція для симуляції вибору в <select>
+    function selectOption(selectId, value) {
+        const select = document.getElementById(selectId);
+        for (let i = 0; i < select.options.length; i++) {
+            if (select.options[i].value == value) {
+                select.selectedIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Очищаємо кошик
+    currentCart = [];
+    renderCart();
+
+    // ТП-5.1: Додавання позиції
+    try {
+        selectOption('order_product', prod1Id);
+        document.getElementById('order_quantity').value = '2'; // 2 * 100 = 200
+        addOrderItem();
+
+        if (currentCart.length === 1 && currentCart[0].price === 100 && document.getElementById('summary_subtotal').innerText === '200.00') {
+            console.log("%c[ПРОЙДЕНО] ТП-5.1:", "color: green;", "Позиція додана, ціна підтягнулась, вартість (200) вірна.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-5.1: Збій під час додавання першої позиції.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.1", e); }
+
+    // ТП-5.2: Кілька позицій
+    try {
+        selectOption('order_product', prod2Id);
+        document.getElementById('order_quantity').value = '4'; // 4 * 200 = 800
+        addOrderItem();
+
+        // 200 + 800 = 1000
+        if (currentCart.length === 2 && document.getElementById('summary_subtotal').innerText === '1000.00') {
+            console.log("%c[ПРОЙДЕНО] ТП-5.2:", "color: green;", "Кілька позицій у кошику, проміжна сума (1000) коректна.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-5.2: Проміжна сума некоректна.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.2", e); }
+
+    // ТП-5.3: Націнка
+    try {
+        document.getElementById('order_markup').value = '20';
+        document.getElementById('order_delivery').value = '0';
+        calculateTotal();
+
+        // 1000 + 20% = 1200
+        if (document.getElementById('summary_total').innerText === '1200.00') {
+            console.log("%c[ПРОЙДЕНО] ТП-5.3:", "color: green;", "Націнка 20% успішно збільшила суму замовлення.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-5.3: Некоректний розрахунок націнки.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.3", e); }
+
+    // ТП-5.4: Доставка
+    try {
+        document.getElementById('order_markup').value = '0';
+        document.getElementById('order_delivery').value = '200';
+        calculateTotal();
+
+        // 1000 + 200 = 1200
+        if (document.getElementById('summary_total').innerText === '1200.00') {
+            console.log("%c[ПРОЙДЕНО] ТП-5.4:", "color: green;", "Вартість доставки додається до підсумкової суми.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-5.4: Некоректний розрахунок доставки.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.4", e); }
+
+    // ТП-5.5: Перевірка формули
+    try {
+        document.getElementById('order_markup').value = '10';
+        document.getElementById('order_delivery').value = '150';
+        calculateTotal();
+
+        // 1000 * 1.1 + 150 = 1250
+        if (document.getElementById('summary_total').innerText === '1250.00') {
+            console.log("%c[ПРОЙДЕНО] ТП-5.5:", "color: green;", "Комплексна формула (1000 × 1.1 + 150 = 1250) перевірена.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-5.5: Збій у підсумковій формулі.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.5", e); }
+
+    // ТП-5.7: Зміна кількості (Додаємо існуючий товар ще раз)
+    try {
+        selectOption('order_product', prod1Id);
+        document.getElementById('order_quantity').value = '1';
+        addOrderItem();
+
+        // Суб-тотал = 3*100 + 4*200 = 1100.
+        // Формула: 1100 * 1.1 + 150 = 1210 + 150 = 1360.
+        if (document.getElementById('summary_subtotal').innerText === '1100.00' &&
+            document.getElementById('summary_total').innerText === '1360.00') {
+            console.log("%c[ПРОЙДЕНО] ТП-5.7:", "color: green;", "При зміні кількості підсумкова сума перераховується автоматично.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-5.7: Динамічний перерахунок після зміни кількості не спрацював.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.7", e); }
+
+    // ТП-5.8: Збереження
+    let savedOrderId = null;
+    try {
+        document.getElementById('order_customer').value = custId;
+
+        // Мокаємо вікно "Замовлення успішно збережено", щоб тест не завис
+        const originalAlert = window.alert;
+        window.alert = () => {};
+        saveOrder();
+        window.alert = originalAlert; // Повертаємо як було
+
+        // Шукаємо збережене замовлення в БД
+        const res = db.exec(`SELECT order_id, total_amount FROM orders WHERE customer_id = ${custId} ORDER BY order_id DESC LIMIT 1`);
+        if (res.length > 0) {
+            savedOrderId = res[0].values[0][0];
+            const savedTotal = res[0].values[0][1];
+
+            // Перевіряємо, чи збереглись позиції
+            const itemsRes = db.exec(`SELECT count(*) FROM order_items WHERE order_id = ${savedOrderId}`);
+            const itemsCount = itemsRes[0].values[0][0];
+
+            if (savedTotal === 1360 && itemsCount === 2) {
+                console.log("%c[ПРОЙДЕНО] ТП-5.8:", "color: green;", `Запис створено в orders (#${savedOrderId}), позиції у order_items, підсумок збережено.`);
+                passed++;
+            } else {
+                console.error("[ПОМИЛКА] ТП-5.8: Дані збережено частково або з помилкою.");
+            }
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.8", e); }
+
+    // ТП-5.6: Фіксація ціни
+    try {
+        if (savedOrderId) {
+            // Емулюємо зміну ціни в каталозі (наприклад, інфляція)
+            db.run(`UPDATE products SET price = 5000 WHERE product_id = ${prod1Id}`);
+
+            // Перевіряємо, чи змінилась ціна в збереженому замовленні
+            const res = db.exec(`SELECT price FROM order_items WHERE order_id = ${savedOrderId} AND product_id = ${prod1Id}`);
+            const historyPrice = res[0].values[0][0];
+
+            const orderRes = db.exec(`SELECT total_amount FROM orders WHERE order_id = ${savedOrderId}`);
+            const orderTotal = orderRes[0].values[0][0];
+
+            if (historyPrice === 100 && orderTotal === 1360) {
+                console.log("%c[ПРОЙДЕНО] ТП-5.6:", "color: green;", "Сума збереженого замовлення не змінилась після оновлення ціни в каталозі!");
+                passed++;
+            } else {
+                console.error("[ПОМИЛКА] ТП-5.6: Зміна ціни в каталозі переписала старе замовлення (відсутня фіксація)!");
+            }
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-5.6", e); }
+
+    console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 5 успішно пройдено ===`, "color: blue; font-weight: bold;");
+}
