@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Електронний каталог будівельних матеріалів</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="navbar">
+    <h1>Каталог будматеріалів</h1>
+    <nav>
+        <button onclick="showSection('catalog')">Каталог</button>
+        <button onclick="showSection('customers')">Клієнти</button>
+        <button onclick="showSection('orders')">Замовлення</button>
+        <button onclick="showSection('dictionaries')">Довідники</button>
+
+        <button onclick="runAutomatedTests()" style="background-color: #f39c12;">Тести Ф-1</button>
+        <button onclick="runPhase2Tests()" style="background-color: #f39c12;">Тести Ф-2</button>
+    </nav>
+</header>
+
+<main id="app-content">
+    <section id="catalog" class="section active">
+        <h2>Каталог товарів</h2>
+        <div id="catalog-content">Завантаження бази даних...</div>
+    </section>
+
+    <section id="dictionaries" class="section" style="display: none;">
+        <h2>Довідники</h2>
+        <div class="dictionaries-container">
+
+            <div class="dict-block">
+                <h3>Категорії</h3>
+                <form id="category-form" onsubmit="saveCategory(event)">
+                    <input type="hidden" id="category_id">
+                    <input type="text" id="category_name" placeholder="Назва категорії" required>
+                    <input type="text" id="category_desc" placeholder="Опис">
+                    <button type="submit" class="btn-save">Зберегти</button>
+                    <button type="button" class="btn-clear" onclick="clearCategoryForm()">Очистити</button>
+                </form>
+                <table class="data-table">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Назва</th>
+                        <th>Опис</th>
+                        <th>Дії</th>
+                    </tr>
+                    </thead>
+                    <tbody id="categories-list"></tbody>
+                </table>
+            </div>
+
+            <div class="dict-block">
+                <h3>Одиниці виміру</h3>
+                <form id="unit-form" onsubmit="saveUnit(event)">
+                    <input type="hidden" id="unit_id">
+                    <input type="text" id="unit_name" placeholder="Повна назва (напр. Метр квадратний)" required>
+                    <input type="text" id="unit_short" placeholder="Скорочення (напр. м²)" required>
+                    <button type="submit" class="btn-save">Зберегти</button>
+                    <button type="button" class="btn-clear" onclick="clearUnitForm()">Очистити</button>
+                </form>
+                <table class="data-table">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Назва</th>
+                        <th>Скорочення</th>
+                        <th>Дії</th>
+                    </tr>
+                    </thead>
+                    <tbody id="units-list"></tbody>
+                </table>
+            </div>
+
+        </div>
+    </section>
+
+    <section id="customers" class="section" style="display: none;">
+        <h2>Клієнти</h2>
+        <div id="customers-content">Дані про клієнтів</div>
+    </section>
+
+    <section id="orders" class="section" style="display: none;">
+        <h2>Замовлення</h2>
+        <div id="orders-content">Список замовлень</div>
+    </section>
+</main>
+
+<script src="lib/sql-wasm.js"></script>
+<script src="app.js"></script>
+<script src="tests.js"></script>
+</body>
+</html>
