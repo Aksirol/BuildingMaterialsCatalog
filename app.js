@@ -429,3 +429,107 @@ function renderProducts() {
         console.error("Помилка завантаження товарів:", e);
     }
 }
+
+// ==========================================
+// ФАЗА 4: МОДУЛЬ КЛІЄНТІВ
+// ==========================================
+
+// Оновлюємо навігацію для підвантаження даних клієнтів
+const originalShowSectionForPhase4 = showSection;
+showSection = function(sectionId) {
+    originalShowSectionForPhase4(sectionId);
+
+    if (sectionId === 'customers') {
+        renderCustomers();
+    }
+};
+
+// Збереження клієнта (Створення / Оновлення)
+function saveCustomer(event) {
+    event.preventDefault();
+
+    const id = document.getElementById('customer_id').value;
+    const name = document.getElementById('customer_name').value.trim();
+    const phone = document.getElementById('customer_phone').value.trim();
+    const email = document.getElementById('customer_email').value.trim();
+    const address = document.getElementById('customer_address').value.trim();
+
+    try {
+        if (id) {
+            db.run(`UPDATE customers SET name = ?, phone = ?, email = ?, address = ? WHERE customer_id = ?`,
+                [name, phone, email, address, id]);
+        } else {
+            db.run(`INSERT INTO customers (name, phone, email, address) VALUES (?, ?, ?, ?)`,
+                [name, phone, email, address]);
+        }
+        clearCustomerForm();
+        renderCustomers();
+    } catch (e) {
+        alert("Помилка при збереженні клієнта: " + e.message);
+    }
+}
+
+// Видалення клієнта
+function deleteCustomer(id) {
+    if (confirm("Видалити цього клієнта?")) {
+        try {
+            db.run("DELETE FROM customers WHERE customer_id = ?", [id]);
+            renderCustomers();
+        } catch (e) {
+            alert("Помилка! Можливо, у цього клієнта вже є оформлені замовлення. (Спрацював захист зовнішнього ключа)");
+        }
+    }
+}
+
+// Підготовка до редагування
+function editCustomer(id, name, phone, email, address) {
+    document.getElementById('customer_id').value = id;
+    document.getElementById('customer_name').value = name;
+    document.getElementById('customer_phone').value = phone !== 'null' ? phone : '';
+    document.getElementById('customer_email').value = email !== 'null' ? email : '';
+    document.getElementById('customer_address').value = address !== 'null' ? address : '';
+}
+
+// Очищення форми
+function clearCustomerForm() {
+    document.getElementById('customer-form').reset();
+    document.getElementById('customer_id').value = "";
+}
+
+// Відмальовування таблиці клієнтів
+function renderCustomers() {
+    const tbody = document.getElementById('customers-list');
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    try {
+        const res = db.exec("SELECT customer_id, name, phone, email, address FROM customers ORDER BY customer_id DESC");
+
+        if (res.length === 0) return;
+
+        res[0].values.forEach(row => {
+            const [id, name, phone, email, address] = row;
+
+            // Захист від null значень для безпечного виводу
+            const safePhone = phone || '-';
+            const safeEmail = email || '-';
+            const safeAddress = address || '-';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${id}</td>
+                <td><strong>${name}</strong></td>
+                <td>${safePhone}</td>
+                <td>${safeEmail}</td>
+                <td>${safeAddress}</td>
+                <td>
+                    <button class="btn-edit" onclick="editCustomer(${id}, '${name}', '${safePhone}', '${safeEmail}', '${safeAddress}')">Ред.</button>
+                    <button class="btn-delete" onclick="deleteCustomer(${id})">Вид.</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error("Помилка завантаження клієнтів:", e);
+    }
+}

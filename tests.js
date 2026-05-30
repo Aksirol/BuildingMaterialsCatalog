@@ -392,3 +392,134 @@ async function runPhase3Tests() {
 
     console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 3 успішно пройдено ===`, "color: blue; font-weight: bold;");
 }
+
+async function runPhase4Tests() {
+    console.log("%c=== Запуск автоматизованих тестів Фази 4 ===", "color: blue; font-weight: bold; font-size: 14px;");
+    let passed = 0;
+    const total = 5;
+
+    if (typeof db === 'undefined' || db === null) {
+        console.error("БД не ініціалізована. Тести скасовано.");
+        return;
+    }
+
+    let testCustomerId = null;
+    const testEmail = `test_${Date.now()}@example.com`;
+
+    // ТП-4.1: Додавання клієнта
+    try {
+        document.getElementById('customer_id').value = '';
+        document.getElementById('customer_name').value = 'Тестовий Клієнт';
+        document.getElementById('customer_phone').value = '+380501234567';
+        document.getElementById('customer_email').value = testEmail;
+        document.getElementById('customer_address').value = 'вул. Будівельників, 1';
+
+        saveCustomer({ preventDefault: () => {} });
+
+        const res = db.exec(`SELECT customer_id FROM customers WHERE email = '${testEmail}'`);
+        if (res.length > 0 && res[0].values.length > 0) {
+            testCustomerId = res[0].values[0][0];
+            console.log("%c[ПРОЙДЕНО] ТП-4.1:", "color: green;", "Клієнт зберігається в таблиці customers.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-4.1: Клієнта не знайдено в базі.");
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-4.1: Збій під час додавання.", e);
+    }
+
+    // ТП-4.2: Редагування
+    try {
+        if (testCustomerId) {
+            // Завантажуємо у форму
+            editCustomer(testCustomerId, 'Тестовий Клієнт', '+380501234567', testEmail, 'вул. Будівельників, 1');
+
+            // Змінюємо номер телефону
+            document.getElementById('customer_phone').value = '+380999999999';
+            saveCustomer({ preventDefault: () => {} });
+
+            const res = db.exec(`SELECT phone FROM customers WHERE customer_id = ${testCustomerId}`);
+            if (res[0].values[0][0] === '+380999999999') {
+                console.log("%c[ПРОЙДЕНО] ТП-4.2:", "color: green;", "Зміни номеру телефону збережені.");
+                passed++;
+            } else {
+                console.error("[ПОМИЛКА] ТП-4.2: Зміни телефону не збереглись.");
+            }
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-4.2: Збій під час редагування.", e);
+    }
+
+    // ТП-4.4: Валідація (Перевіряємо до видалення, поки працюємо з формою)
+    try {
+        const form = document.getElementById('customer-form');
+
+        // Спроба 1: Порожнє ім'я
+        document.getElementById('customer_name').value = '';
+        document.getElementById('customer_email').value = 'valid@email.com';
+        let isNameValid = form.checkValidity();
+
+        // Спроба 2: Некоректний email
+        document.getElementById('customer_name').value = 'Іван';
+        document.getElementById('customer_email').value = 'некоректний-email'; // Браузер має відхилити через type="email"
+        let isEmailValid = form.checkValidity();
+
+        if (!isNameValid && !isEmailValid) {
+            console.log("%c[ПРОЙДЕНО] ТП-4.4:", "color: green;", "Форма не пропускає некоректний email або порожнє ім'я.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-4.4: Валідація форми не спрацювала.");
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-4.4: Збій під час перевірки валідації.", e);
+    }
+
+    // ТП-4.5: Вибір клієнта (Перевірка можливості прив'язки до замовлення)
+    try {
+        if (testCustomerId) {
+            // Симулюємо створення замовлення для цього клієнта
+            db.run("INSERT INTO orders (customer_id, status) VALUES (?, ?)", [testCustomerId, 'Тестове']);
+            const res = db.exec(`SELECT order_id FROM orders WHERE customer_id = ${testCustomerId}`);
+
+            if (res.length > 0) {
+                console.log("%c[ПРОЙДЕНО] ТП-4.5:", "color: green;", "Клієнт успішно прив'язується до замовлення (Foreign Key працює).");
+                passed++;
+
+                // Видаляємо це тестове замовлення, щоб зняти блокування FK перед видаленням клієнта
+                db.run(`DELETE FROM orders WHERE customer_id = ${testCustomerId}`);
+            } else {
+                console.error("[ПОМИЛКА] ТП-4.5: Не вдалося створити замовлення для клієнта.");
+            }
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-4.5: Збій під час перевірки прив'язки до замовлення.", e);
+    }
+
+    // ТП-4.3: Видалення
+    try {
+        if (testCustomerId) {
+            // Підміняємо confirm, щоб тест пройшов без втручання користувача
+            const originalConfirm = window.confirm;
+            window.confirm = () => true;
+
+            deleteCustomer(testCustomerId);
+            window.confirm = originalConfirm;
+
+            const res = db.exec(`SELECT * FROM customers WHERE customer_id = ${testCustomerId}`);
+            if (res.length === 0) {
+                console.log("%c[ПРОЙДЕНО] ТП-4.3:", "color: green;", "Клієнт зникає зі списку та видаляється з БД.");
+                passed++;
+            } else {
+                console.error("[ПОМИЛКА] ТП-4.3: Клієнт все ще існує в базі.");
+            }
+        }
+    } catch (e) {
+        console.error("[ПОМИЛКА] ТП-4.3: Збій під час видалення.", e);
+    }
+
+    // Очищення та повернення інтерфейсу в норму
+    clearCustomerForm();
+    renderCustomers();
+
+    console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 4 успішно пройдено ===`, "color: blue; font-weight: bold;");
+}

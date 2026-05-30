@@ -19,6 +19,7 @@
         <button onclick="runAutomatedTests()" style="background-color: #f39c12;">Тести Ф-1</button>
         <button onclick="runPhase2Tests()" style="background-color: #f39c12;">Тести Ф-2</button>
         <button onclick="runPhase3Tests()" style="background-color: #f39c12;">Тести Ф-3</button>
+        <button onclick="runPhase4Tests()" style="background-color: #f39c12;">Тести Ф-4</button>
     </nav>
 </header>
 
@@ -138,7 +139,43 @@
 
     <section id="customers" class="section" style="display: none;">
         <h2>Клієнти</h2>
-        <div id="customers-content">Дані про клієнтів</div>
+
+        <div class="form-container">
+            <h3>Додати / Редагувати клієнта</h3>
+            <form id="customer-form" onsubmit="saveCustomer(event)">
+                <input type="hidden" id="customer_id">
+
+                <div class="form-row">
+                    <input type="text" id="customer_name" placeholder="ПІБ клієнта*" required>
+                    <input type="text" id="customer_phone" placeholder="Телефон (напр. +380...)">
+                </div>
+
+                <div class="form-row">
+                    <input type="email" id="customer_email" placeholder="Email">
+                    <input type="text" id="customer_address" placeholder="Адреса доставки">
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-save">Зберегти клієнта</button>
+                    <button type="button" class="btn-clear" onclick="clearCustomerForm()">Очистити</button>
+                </div>
+            </form>
+        </div>
+
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>ПІБ</th>
+                <th>Телефон</th>
+                <th>Email</th>
+                <th>Адреса</th>
+                <th>Дії</th>
+            </tr>
+            </thead>
+            <tbody id="customers-list">
+            </tbody>
+        </table>
     </section>
 
     <section id="orders" class="section" style="display: none;">
