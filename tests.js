@@ -825,3 +825,144 @@ async function runPhase6Tests() {
 
     console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 6 успішно пройдено ===`, "color: blue; font-weight: bold;");
 }
+
+async function runPhase7Tests() {
+    console.log("%c=== Запуск автоматизованих тестів Фази 7 ===", "color: blue; font-weight: bold; font-size: 14px;");
+    let passed = 0;
+    const total = 6;
+
+    if (typeof db === 'undefined' || db === null || typeof SQLModule === 'undefined') {
+        console.error("БД не ініціалізована або SQLModule відсутній. Тести скасовано.");
+        return;
+    }
+
+    // ТП-7.1: Експорт БД
+    let originalCreateElement = document.createElement;
+    let originalExport = db.export;
+    try {
+        let exportCalled = false;
+        db.export = function() {
+            exportCalled = true;
+            return originalExport.apply(this, arguments);
+        };
+
+        // Створюємо СПРАВЖНІЙ DOM-елемент, але «глушимо» його подію click, щоб не скачувати файл
+        document.createElement = function(tagName) {
+            const el = originalCreateElement.call(document, tagName);
+            if (tagName.toLowerCase() === 'a') {
+                el.click = function() {};
+            }
+            return el;
+        };
+
+        exportDatabase();
+
+        if (exportCalled) {
+            console.log("%c[ПРОЙДЕНО] ТП-7.1:", "color: green;", "Експорт БД пройшов успішно.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-7.1: Функція db.export() не була викликана.");
+        }
+    } catch(e) {
+        console.error("[ПОМИЛКА] ТП-7.1", e);
+    } finally {
+        // Блок finally гарантує, що оригінальні функції повернуться навіть при помилці
+        db.export = originalExport;
+        document.createElement = originalCreateElement;
+    }
+
+    // ТП-7.2 та ТП-7.3: Імпорт БД і Перенесення
+    const originalFileReader = window.FileReader;
+    const originalAlert = window.alert;
+    let alertMsg = "";
+
+    try {
+        db.run("INSERT INTO categories (name) VALUES ('СпецКатегорія_Експорт')");
+        const backupBytes = db.export();
+
+        // ВАЖЛИВО: Створюємо чисту ізольовану копію пам'яті (без усього сміття WebAssembly)
+        const cleanBuffer = new Uint8Array(backupBytes).buffer;
+
+        // Імітуємо втрату даних
+        db.run("DELETE FROM categories WHERE name = 'СпецКатегорія_Експорт'");
+
+        window.FileReader = class {
+            readAsArrayBuffer(blob) {
+                this.result = cleanBuffer;
+                this.onload();
+            }
+        };
+
+        window.alert = (msg) => { alertMsg = msg; };
+
+        // Викликаємо імпорт нашого збереженого буфера
+        const fakeEvent = { target: { files: [new Blob([cleanBuffer])] }, value: '' };
+        importDatabase(fakeEvent);
+
+        const res = db.exec("SELECT count(*) FROM categories WHERE name = 'СпецКатегорія_Експорт'");
+
+        if (res.length > 0 && res[0].values[0][0] === 1 && alertMsg.includes('успішно')) {
+            console.log("%c[ПРОЙДЕНО] ТП-7.2:", "color: green;", "Дані успішно відновлюються з файлу.");
+            console.log("%c[ПРОЙДЕНО] ТП-7.3:", "color: green;", "Перенесення БД працює без втрат інформації.");
+            passed += 2;
+        } else {
+            console.error("[ПОМИЛКА] ТП-7.2 / 7.3: Дані не відновилися після імпорту.");
+        }
+    } catch(e) {
+        console.error("[ПОМИЛКА] ТП-7.2/7.3", e);
+    } finally {
+        window.FileReader = originalFileReader;
+        window.alert = originalAlert;
+        alertMsg = "";
+    }
+
+    // ТП-7.4: Офлайн-робота
+    try {
+        if (typeof config !== 'undefined' && config.locateFile && config.locateFile('test.wasm').includes('./lib/')) {
+            console.log("%c[ПРОЙДЕНО] ТП-7.4:", "color: green;", "Локальні шляхи (locateFile) налаштовані правильно.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-7.4: sql.js може звертатися до мережі.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-7.4", e); }
+
+    // ТП-7.5: Обробка помилок (Завантаження пошкодженого файлу)
+    try {
+        window.FileReader = class {
+            readAsArrayBuffer(blob) {
+                this.result = new Uint8Array([1, 2, 3, 4]).buffer; // Навмисно биті дані
+                this.onload();
+            }
+        };
+        window.alert = (msg) => { alertMsg = msg; };
+
+        const fakeEvent = { target: { files: [new Blob(['bad data'])] }, value: '' };
+        importDatabase(fakeEvent);
+
+        if (alertMsg.includes('Помилка імпорту')) {
+            console.log("%c[ПРОЙДЕНО] ТП-7.5:", "color: green;", "Спроба імпорту некоректного файлу перехоплена (застосунок не впав).");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-7.5: Помилка імпорту не була оброблена.");
+        }
+    } catch(e) {
+        console.error("[ПОМИЛКА] ТП-7.5", e);
+    } finally {
+        window.FileReader = originalFileReader;
+        window.alert = originalAlert;
+    }
+
+    // ТП-7.6: Наскрізний сценарій
+    try {
+        // Оскільки ТП-7.5 більше не руйнує базу, цей запит має пройти успішно
+        const res = db.exec("SELECT count(name) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+        if (res[0].values[0][0] === 6) {
+            console.log("%c[ПРОЙДЕНО] ТП-7.6:", "color: green;", "Повний життєвий цикл пройдено: база цілісна.");
+            passed++;
+        } else {
+            console.error("[ПОМИЛКА] ТП-7.6: Порушено цілісність наскрізного сценарію.");
+        }
+    } catch(e) { console.error("[ПОМИЛКА] ТП-7.6", e); }
+
+    console.log(`%c=== Результат: ${passed} / ${total} тестів Фази 7 успішно пройдено ===`, "color: blue; font-weight: bold;");
+}

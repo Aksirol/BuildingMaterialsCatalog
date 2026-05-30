@@ -2,6 +2,7 @@
 // ГЛОБАЛЬНІ ЗМІННІ (оголошуємо лише один раз!)
 // ==========================================
 let db;
+let SQLModule;
 
 // Конфігурація для завантаження wasm
 const config = {
@@ -12,6 +13,7 @@ const config = {
 // ІНІЦІАЛІЗАЦІЯ БАЗИ ДАНИХ
 // ==========================================
 initSqlJs(config).then(function(SQL) {
+    SQLModule = SQL;
     db = new SQL.Database();
 
     // Вмикаємо зовнішні ключі
@@ -928,4 +930,76 @@ window.onclick = function(event) {
     if (event.target == modal) {
         closeOrderModal();
     }
+}
+
+// ==========================================
+// ФАЗА 7: ЕКСПОРТ ТА ІМПОРТ БАЗИ ДАНИХ
+// ==========================================
+
+// Функція експорту (завантаження файлу на ПК)
+function exportDatabase() {
+    try {
+        // Отримуємо масив байтів з sql.js
+        const data = db.export();
+
+        // Перетворюємо у Blob
+        const blob = new Blob([data], { type: "application/x-sqlite3" });
+        const url = URL.createObjectURL(blob);
+
+        // Створюємо тимчасове посилання і клікаємо по ньому
+        const a = document.createElement("a");
+        a.href = url;
+        // Назва файлу містить поточну дату
+        a.download = `catalog_db_${new Date().toISOString().slice(0,10)}.sqlite`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Прибираємо за собою
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log("Експорт бази даних успішно завершено.");
+    } catch (e) {
+        alert("Помилка експорту: " + e.message);
+    }
+}
+
+// Функція імпорту (читання файлу з ПК)
+// Функція імпорту (читання файлу з ПК)
+function importDatabase(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function() {
+        try {
+            const Uints = new Uint8Array(reader.result);
+
+            // Створюємо ТИМЧАСОВУ базу даних
+            const tempDb = new SQLModule.Database(Uints);
+
+            // ПРИМУСОВА ПЕРЕВІРКА: Цей запит згенерує помилку, якщо файл не є базою SQLite
+            tempDb.exec("SELECT count(*) FROM sqlite_master");
+
+            // Вмикаємо зовнішні ключі
+            tempDb.run("PRAGMA foreign_keys = ON;");
+
+            // Якщо помилок не було — файл коректний! Перезаписуємо робочу базу
+            db = tempDb;
+
+            alert("Базу даних успішно завантажено!");
+
+            // Оновлюємо інтерфейс
+            if (typeof populateSelects === 'function') populateSelects();
+            showSection('catalog');
+
+        } catch (e) {
+            // Якщо файл пошкоджений, робоча база db залишається цілою!
+            alert("Помилка імпорту бази даних. Переконайтеся, що файл коректний. Деталі: " + e.message);
+        }
+
+        event.target.value = '';
+    };
+
+    reader.readAsArrayBuffer(file);
 }

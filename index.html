@@ -15,13 +15,15 @@
         <button onclick="showSection('customers')">Клієнти</button>
         <button onclick="showSection('orders')">Замовлення</button>
         <button onclick="showSection('dictionaries')">Довідники</button>
+        <button onclick="showSection('admin')">База даних</button>
 
         <button onclick="runAutomatedTests()" style="background-color: #f39c12;">Т-1</button>
         <button onclick="runPhase2Tests()" style="background-color: #f39c12;">Т-2</button>
         <button onclick="runPhase3Tests()" style="background-color: #f39c12;">Т-3</button>
         <button onclick="runPhase4Tests()" style="background-color: #f39c12;">Т-4</button>
         <button onclick="runPhase5Tests()" style="background-color: #f39c12;">Т-5</button>
-        <button onclick="runPhase6Tests()" style="background-color: #8e44ad; color: white;">Тести Ф-6</button>
+        <button onclick="runPhase6Tests()" style="background-color: #f39c12;">Т-6</button>
+        <button onclick="runPhase7Tests()" style="background-color: #27ae60; color: white;">Тести Ф-7</button>
     </nav>
 </header>
 
@@ -263,6 +265,28 @@
             <tbody id="orders-list">
             </tbody>
         </table>
+    </section>
+
+    <section id="admin" class="section" style="display: none;">
+        <h2>Управління базою даних</h2>
+
+        <div class="form-container">
+            <h3>Експорт (Збереження на комп'ютер)</h3>
+            <p style="color: #7f8c8d; margin-bottom: 1rem;">
+                Оскільки база даних працює в оперативній пам'яті браузера, <b>обов'язково зберігайте її</b> перед закриттям вкладки, щоб не втратити замовлення та товари.
+            </p>
+            <button class="btn-save" style="background-color: #27ae60; padding: 0.8rem 1.5rem; font-size: 1.1rem;" onclick="exportDatabase()">💾 Завантажити базу (.sqlite)</button>
+        </div>
+
+        <div class="form-container" style="margin-top: 2rem;">
+            <h3>Імпорт (Відновлення з файлу)</h3>
+            <p style="color: #7f8c8d; margin-bottom: 1rem;">
+                Завантажте раніше збережений файл бази даних, щоб продовжити роботу.
+            </p>
+            <input type="file" id="db-upload" accept=".sqlite,.db" onchange="importDatabase(event)" style="display: none;">
+
+            <button class="btn-save" style="background-color: #f39c12; padding: 0.8rem 1.5rem; font-size: 1.1rem;" onclick="document.getElementById('db-upload').click()">📂 Відкрити файл бази</button>
+        </div>
     </section>
 </main>
 
